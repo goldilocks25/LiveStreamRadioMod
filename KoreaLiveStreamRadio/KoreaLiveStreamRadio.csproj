@@ -1,0 +1,79 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <OutputType>Library</OutputType>
+        <TargetFramework>net472</TargetFramework>
+        <Configurations>Debug;Release</Configurations>
+        <LangVersion>latest</LangVersion>
+        <!--The folder where Game.dll is located. Set it only if the game is not installed in the default location, otherwise keep it empty-->
+        <CustomManagedPath>C:\Program Files (x86)\Steam\steamapps\common\Cities Skylines II\Cities2_Data\Managed</CustomManagedPath>
+
+        <!--Path to the text file where PDX account data is stored which is required to publish the mod-->
+        <!--Keep it outside of project in order to not commit it or share accidentally-->
+        <!--The file should contain 2 lines:-->
+        <!--Your.PDX@Account.login-->
+        <!--Your-PDX-Account-Pa$$word-->
+        <PDXAccountDataPath>$(USERPROFILE)\Desktop\pdx_account.txt</PDXAccountDataPath>
+        <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+        <RootNamespace>KoreaLiveStreamRadio</RootNamespace>
+    </PropertyGroup>
+
+    <!--Imports must be after PropertyGroup block-->
+    <Import Project="$([System.Environment]::GetEnvironmentVariable('CSII_TOOLPATH', 'EnvironmentVariableTarget.User'))\Mod.props"/>
+    <Import Project="$([System.Environment]::GetEnvironmentVariable('CSII_TOOLPATH', 'EnvironmentVariableTarget.User'))\Mod.targets"/>
+
+    <ItemGroup>
+        <Reference Include="$(CustomManagedPath)\Colossal.*.dll" Private="False" />
+        <Reference Include="$(CustomManagedPath)\Game*.dll" Private="False" />
+        <Reference Include="$(CustomManagedPath)\Unity.*.dll" Private="False" />
+        <Reference Include="$(CustomManagedPath)\UnityEngine.*.dll" Private="False" />
+        <Reference Include="$(CustomManagedPath)\cohtml.Net.dll" Private="False" />
+    </ItemGroup>
+    <ItemGroup>
+        <PackageReference Include="NAudio" Version="1.10.0" />
+        <PackageReference Include="Lib.Harmony" Version="2.2.2" />
+    </ItemGroup>
+    <ItemGroup>
+        <Reference Update="System">
+            <Private>false</Private>
+        </Reference>
+        <Reference Update="System.Core">
+            <Private>false</Private>
+        </Reference>
+        <Reference Update="System.Data">
+            <Private>false</Private>
+        </Reference>
+        <Reference Update="System.Net">
+            <Private>false</Private>
+        </Reference>
+        <Reference Update="System.Threading">
+            <Private>false</Private>
+        </Reference>
+    </ItemGroup>
+
+    <ItemGroup>
+        <None Include="$(ModPropsFile)" Link="Properties\Mod.props"/>
+        <None Include="$(ModTargetsFile)" Link="Properties\Mod.targets"/>
+        <None Update="Assets\cbs_music_radio.png">
+          <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+        </None>
+        <None Update="Assets\kbs_radio.png">
+          <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+        </None>
+        <None Update="Assets\korean_radio.png">
+          <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+        </None>
+        <None Update="Assets\mbc_radio.jpg">
+          <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+        </None>
+        <None Update="Assets\sbs_radio.jpg">
+          <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+        </None>
+        <None Update="Assets\ytn_radio.png">
+          <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+        </None>
+        <None Update="Properties\korean_radio.png">
+          <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+        </None>
+    </ItemGroup>
+</Project>

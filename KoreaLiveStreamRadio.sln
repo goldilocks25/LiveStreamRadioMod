@@ -1,0 +1,18 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "KoreaLiveStreamRadio", "KoreaLiveStreamRadio\KoreaLiveStreamRadio.csproj", "{697495FA-4D05-439D-8F4D-E5CD5EBC38DB}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "SolutionFolder1", "SolutionFolder1", "{6A3BC6B5-C068-4267-BB38-074581FCF17B}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{697495FA-4D05-439D-8F4D-E5CD5EBC38DB}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{697495FA-4D05-439D-8F4D-E5CD5EBC38DB}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{697495FA-4D05-439D-8F4D-E5CD5EBC38DB}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{697495FA-4D05-439D-8F4D-E5CD5EBC38DB}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+EndGlobal
