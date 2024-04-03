@@ -1,6 +1,7 @@
 ﻿using System.Collections;
 using System.Linq;
 using System.Text.RegularExpressions;
+using System.Threading;
 using Colossal.Logging;
 using KoreaLiveStreamRadio.Code;
 using KoreaLiveStreamRadio.Patches;
@@ -146,7 +147,7 @@ public class RadioController : MonoBehaviour
     {
         var aacUrl = streamServer + ReplaceNumbers(_aacUrl, _initialParamNumber++.ToString());
         LOG.Info($"Aac Url: {aacUrl}");
-        yield return StartCoroutine(ConvertAccToWavFile(aacUrl, 0));
+        ConvertAccToWavFile(aacUrl, 0);
         yield return StartCoroutine(PlayAudio());
     }
 
@@ -157,7 +158,11 @@ public class RadioController : MonoBehaviour
 
         if (www.result != UnityWebRequest.Result.Success)
         {
+#if DEBUG
             Debug.LogWarning("pls 파일 다운로드 중 오류 발생: " + www.error);
+#else
+            LOG.Warn("Failed to download M3U8 file: " + www.error);
+#endif
             yield break;
         }
         
@@ -200,7 +205,11 @@ public class RadioController : MonoBehaviour
 
         if (www.result != UnityWebRequest.Result.Success)
         {
+#if DEBUG
             Debug.LogWarning("Failed to download M3U8 file: " + www.error);
+#else
+                        LOG.Warn("Failed to download M3U8 file: " + www.error);
+#endif
             yield break;
         }
 
@@ -227,7 +236,12 @@ public class RadioController : MonoBehaviour
 
                 if (www.result != UnityWebRequest.Result.Success)
                 {
+#if DEBUG
                     Debug.LogWarning("Failed to download M3U8 file: " + www.error);
+#else
+                        LOG.Warn("Failed to download M3U8 file: " + www.error);
+#endif
+                    
                     yield break;
                 }
 
@@ -257,18 +271,23 @@ public class RadioController : MonoBehaviour
 
     private IEnumerator PlayAudio()
     {
+        yield return new WaitWhile(() => isConverting);
         var www = UnityWebRequestMultimedia.GetAudioClip(GetWavFileName(0), AudioType.WAV);
         yield return www.SendWebRequest();
         
-        // 새로운 AudioClip 로드
         var nextAudioSource = gameObject.AddComponent<AudioSource>();
         var clip = DownloadHandlerAudioClip.GetContent(www);
         nextAudioSource.clip = clip;
         
         yield return new WaitWhile(() =>
         {
+            if (!_audioSource.isPlaying)
+                return false;
+            
             var currentTime = _audioSource.time;
-            return _audioSource.isPlaying && currentTime < _audioSource.clip.length - 0.1f;
+            var clipLength = _audioSource.clip.length;
+            var correction = clipLength < 3 ? 0.06f : clipLength < 4 ? 0.08f : 0.1f;
+            return currentTime < clipLength - correction;
         });
         
         if (_isPaused)
@@ -283,19 +302,37 @@ public class RadioController : MonoBehaviour
         _audioSource = nextAudioSource;
     }
 
-    private static IEnumerator ConvertAccToWavFile(string aacUrl, int index)
+    private static bool isConverting = false;
+    
+    // FIXME : Start of wave file Audio truncated
+    private static void ConvertAccToWavFile(string aacUrl, int index)
     {
-        using var aacReader = new MediaFoundationReader(aacUrl);
-        var aacToWav = new WaveFormatConversionStream(new WaveFormat(44100, 16, 2), aacReader);
-        using var wavWriter = new WaveFileWriter(GetWavFileName(index), new WaveFormat(44100, 16, 2));
-        var buffer = new byte[2048 * 16];
-        int bytesRead;
-        
-        while ((bytesRead = aacToWav.Read(buffer, 0, buffer.Length)) > 0)
+        if (isConverting)
         {
-            wavWriter.Write(buffer, 0, bytesRead);
-            yield return null;
+            return;
         }
+
+        isConverting = true;
+        ThreadPool.QueueUserWorkItem(state =>
+        {
+            try
+            {
+                using var aacReader = new MediaFoundationReader(aacUrl);
+                var aacToWav = new WaveFormatConversionStream(new WaveFormat(44100, 16, 2), aacReader);
+                using var wavWriter = new WaveFileWriter(GetWavFileName(index), new WaveFormat(44100, 16, 2));
+                var buffer = new byte[4096];
+                int bytesRead;
+                        
+                while ((bytesRead = aacToWav.Read(buffer, 0, buffer.Length)) > 0)
+                {
+                    wavWriter.Write(buffer, 0, bytesRead);
+                }
+            }
+            finally
+            {
+                isConverting = false;
+            }
+        });
     }
 
     private static string GetWavFileName(int index)

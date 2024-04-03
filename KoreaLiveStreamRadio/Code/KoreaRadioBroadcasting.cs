@@ -88,6 +88,7 @@ public class KoreaRadioBroadcasting
 
     private static string GetAssets(string name)
     {
-        return $@"Assets\{name}";
+        _log.Info($"path: {Application.persistentDataPath}");
+        return $@"{Application.persistentDataPath}\.cache\Mods\mods_subscribed\77367_2\Assets\{name}";
     }
 }
