@@ -1,6 +1,7 @@
 ﻿using System.Collections;
 using System.Linq;
 using System.Text.RegularExpressions;
+using Colossal.Logging;
 using KoreaLiveStreamRadio.Code;
 using KoreaLiveStreamRadio.Patches;
 using Game.Audio;
@@ -21,6 +22,7 @@ public class RadioController : MonoBehaviour
     private static bool _isPaused;
     private static bool _isPlaying;
     private static string _selectionChannel;
+    private static readonly ILog LOG = KoreaRadioBroadcasting._log;
 
     private void Start()
     {
@@ -28,7 +30,7 @@ public class RadioController : MonoBehaviour
         _audioManager = AudioManager.instance;
         _audioSource.playOnAwake = false;
         _radio = RealtimeRadio.Radio;
-        KoreaRadioBroadcasting._log.Info("Radio start");
+        LOG.Info("Radio start");
     }
 
     private void Update()
@@ -122,7 +124,7 @@ public class RadioController : MonoBehaviour
 
             if (_isPlaying) return;
             _isPlaying = true;
-            KoreaRadioBroadcasting._log.Info($"start radio: {channel.name}");
+            LOG.Info($"start radio: {channel.name}");
             StopCoroutine("Play");
             StartCoroutine(Play(liveStation, liveChannel, streamChannel, channel.name));
         }
@@ -140,9 +142,12 @@ public class RadioController : MonoBehaviour
         _isPaused = false;
     }
 
-    private IEnumerator PlayAudio(string streamServer)
+    private IEnumerator ConvertAndPlayAudio(string streamServer)
     {
-        yield return StartCoroutine(LoadAudio(streamServer + ReplaceNumbers(_aacUrl, _initialParamNumber++.ToString())));
+        var aacUrl = streamServer + ReplaceNumbers(_aacUrl, _initialParamNumber++.ToString());
+        LOG.Info($"Aac Url: {aacUrl}");
+        yield return StartCoroutine(ConvertAccToWavFile(aacUrl, 0));
+        yield return StartCoroutine(PlayAudio());
     }
 
     private IEnumerator DownloadAndParsePls(string streamServer, string hlsServer)
@@ -152,11 +157,11 @@ public class RadioController : MonoBehaviour
 
         if (www.result != UnityWebRequest.Result.Success)
         {
-            Debug.LogError("pls 파일 다운로드 중 오류 발생: " + www.error);
+            Debug.LogWarning("pls 파일 다운로드 중 오류 발생: " + www.error);
             yield break;
         }
         
-        KoreaRadioBroadcasting._log.Info("Parse pls");
+        LOG.Info("Parse pls");
                 
         // pls 파일 내 스트리밍 URL 파싱
         var m3U8File = ParsePls(www.downloadHandler.text);
@@ -174,7 +179,7 @@ public class RadioController : MonoBehaviour
         );
         while (_selectionChannel == gameChannel)
         {
-            yield return StartCoroutine(PlayAudio(RadioStreamServer.GetStreamServer(liveStation, streamChannel)));
+            yield return StartCoroutine(ConvertAndPlayAudio(RadioStreamServer.GetStreamServer(liveStation, streamChannel)));
         }
         _isPlaying = false;
     }
@@ -188,14 +193,14 @@ public class RadioController : MonoBehaviour
 
     private IEnumerator DownloadPls(string streamServer, string m3U8Url)
     {
-        KoreaRadioBroadcasting._log.Info($"m3u8 start: {m3U8Url}");
+        LOG.Info($"m3u8 start: {m3U8Url}");
         // M3U8 파일 다운로드
         var www = UnityWebRequest.Get(m3U8Url);
         yield return www.SendWebRequest();
 
         if (www.result != UnityWebRequest.Result.Success)
         {
-            Debug.LogError("Failed to download M3U8 file: " + www.error);
+            Debug.LogWarning("Failed to download M3U8 file: " + www.error);
             yield break;
         }
 
@@ -215,14 +220,14 @@ public class RadioController : MonoBehaviour
             if (string.IsNullOrEmpty(line)) continue;
             if (line.Contains(".m3u8"))
             {
-                KoreaRadioBroadcasting._log.Info($"chunk server: {streamServer + line.Trim()}");
+                LOG.Info($"chunk server: {streamServer + line.Trim()}");
                 // M3U8 파일 다운로드
                 var www = UnityWebRequest.Get(streamServer + line.Trim());
                 yield return www.SendWebRequest();
 
                 if (www.result != UnityWebRequest.Result.Success)
                 {
-                    Debug.LogError("Failed to download M3U8 file: " + www.error);
+                    Debug.LogWarning("Failed to download M3U8 file: " + www.error);
                     yield break;
                 }
 
@@ -250,47 +255,46 @@ public class RadioController : MonoBehaviour
         return input.Substring(0, match.Index) + newNumbers+ "." + input.Substring(match.Index + match.Length);
     }
 
-    private IEnumerator LoadAudio(string aacUrl)
+    private IEnumerator PlayAudio()
     {
-        KoreaRadioBroadcasting._log.Info($"aacUrl: {aacUrl}");
-        var request = UnityWebRequest.Get(aacUrl);
-
-        // Send the request
-        yield return request.SendWebRequest();
-        
-        // Check for errors
-        if (request.result is UnityWebRequest.Result.ConnectionError or UnityWebRequest.Result.ProtocolError)
-        {
-            Debug.LogError("Error fetching HLS stream: " + request.error);
-        }
-            
-        ConvertAccToWavFile(aacUrl, 0);
-
         var www = UnityWebRequestMultimedia.GetAudioClip(GetWavFileName(0), AudioType.WAV);
         yield return www.SendWebRequest();
-        _audioSource = gameObject.AddComponent<AudioSource>();
-        _audioSource.clip = DownloadHandlerAudioClip.GetContent(www);
+        
+        // 새로운 AudioClip 로드
+        var nextAudioSource = gameObject.AddComponent<AudioSource>();
+        var clip = DownloadHandlerAudioClip.GetContent(www);
+        nextAudioSource.clip = clip;
+        
+        yield return new WaitWhile(() =>
+        {
+            var currentTime = _audioSource.time;
+            return _audioSource.isPlaying && currentTime < _audioSource.clip.length - 0.1f;
+        });
+        
         if (_isPaused)
         {
-            _audioSource.Pause();
+            nextAudioSource.Pause();
         }
         else
         {
-            _audioSource.Play();
+            nextAudioSource.Play();
         }
-        yield return new WaitForSeconds(_audioSource.clip.length - 0.085f);
+
+        _audioSource = nextAudioSource;
     }
 
-    private static void ConvertAccToWavFile(string aacUrl, int index)
+    private static IEnumerator ConvertAccToWavFile(string aacUrl, int index)
     {
         using var aacReader = new MediaFoundationReader(aacUrl);
         var aacToWav = new WaveFormatConversionStream(new WaveFormat(44100, 16, 2), aacReader);
         using var wavWriter = new WaveFileWriter(GetWavFileName(index), new WaveFormat(44100, 16, 2));
-        var buffer = new byte[4096];
+        var buffer = new byte[2048 * 16];
         int bytesRead;
+        
         while ((bytesRead = aacToWav.Read(buffer, 0, buffer.Length)) > 0)
         {
             wavWriter.Write(buffer, 0, bytesRead);
+            yield return null;
         }
     }
 
