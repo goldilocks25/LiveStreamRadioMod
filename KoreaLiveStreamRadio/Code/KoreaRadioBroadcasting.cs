@@ -1,4 +1,5 @@
 ﻿using System.Collections.Generic;
+using System.IO;
 using KoreaLiveStreamRadio.Mono;
 using KoreaLiveStreamRadio.Patches;
 using Colossal.Logging;
@@ -88,7 +89,8 @@ public class KoreaRadioBroadcasting
 
     private static string GetAssets(string name)
     {
-        _log.Info($"path: {Application.persistentDataPath}");
-        return $@"{Application.persistentDataPath}\.cache\Mods\mods_subscribed\77367_2\Assets\{name}";
+        var directory =
+            Directory.GetDirectories($@"{Application.persistentDataPath}\.cache\Mods\mods_subscribed", "77367_*")[0];
+        return $@"{directory}\Assets\{name}";
     }
 }

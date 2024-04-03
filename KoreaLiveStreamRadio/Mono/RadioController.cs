@@ -271,7 +271,7 @@ public class RadioController : MonoBehaviour
 
     private IEnumerator PlayAudio()
     {
-        yield return new WaitWhile(() => isConverting);
+        yield return new WaitWhile(() => _isConverting);
         var www = UnityWebRequestMultimedia.GetAudioClip(GetWavFileName(0), AudioType.WAV);
         yield return www.SendWebRequest();
         
@@ -284,10 +284,10 @@ public class RadioController : MonoBehaviour
             if (!_audioSource.isPlaying)
                 return false;
             
-            var currentTime = _audioSource.time;
             var clipLength = _audioSource.clip.length;
-            var correction = clipLength < 3 ? 0.06f : clipLength < 4 ? 0.08f : 0.1f;
-            return currentTime < clipLength - correction;
+            // Missing buffer after conversion to wave file
+            var correction = clipLength < 3 ? 0.06f : 0.065f;
+            return _audioSource.time < clipLength - correction;
         });
         
         if (_isPaused)
@@ -302,17 +302,17 @@ public class RadioController : MonoBehaviour
         _audioSource = nextAudioSource;
     }
 
-    private static bool isConverting = false;
+    private static bool _isConverting;
     
     // FIXME : Start of wave file Audio truncated
     private static void ConvertAccToWavFile(string aacUrl, int index)
     {
-        if (isConverting)
+        if (_isConverting)
         {
             return;
         }
 
-        isConverting = true;
+        _isConverting = true;
         ThreadPool.QueueUserWorkItem(state =>
         {
             try
@@ -320,7 +320,7 @@ public class RadioController : MonoBehaviour
                 using var aacReader = new MediaFoundationReader(aacUrl);
                 var aacToWav = new WaveFormatConversionStream(new WaveFormat(44100, 16, 2), aacReader);
                 using var wavWriter = new WaveFileWriter(GetWavFileName(index), new WaveFormat(44100, 16, 2));
-                var buffer = new byte[4096];
+                var buffer = new byte[4096 * 4096];
                 int bytesRead;
                         
                 while ((bytesRead = aacToWav.Read(buffer, 0, buffer.Length)) > 0)
@@ -330,7 +330,7 @@ public class RadioController : MonoBehaviour
             }
             finally
             {
-                isConverting = false;
+                _isConverting = false;
             }
         });
     }
