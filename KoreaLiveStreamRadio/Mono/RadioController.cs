@@ -321,6 +321,7 @@ public class RadioController : MonoBehaviour
     // FIXME : Start of wave file Audio truncated
     private static void ConvertAccToWavFile(string aacUrl, int index)
     {
+        _isConverting = true;
         try
         {
             using var aacReader = new MediaFoundationReader(aacUrl);
@@ -333,12 +334,15 @@ public class RadioController : MonoBehaviour
             {
                 wavWriter.Write(buffer, 0, bytesRead);
             }
+            wavWriter.Close();
         }
         catch
         {
             LOG.Warn("Realtime so fast");
             _aacUrlParamNumber -= 1;
         }
+
+        _isConverting = false;
     }
 
     private static string GetWavFileName(int index)
