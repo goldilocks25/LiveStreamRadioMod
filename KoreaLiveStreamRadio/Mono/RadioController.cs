@@ -1,4 +1,5 @@
-﻿using System.Collections;
+﻿using System;
+using System.Collections;
 using System.Linq;
 using System.Text.RegularExpressions;
 using System.Threading;
@@ -15,21 +16,23 @@ namespace KoreaLiveStreamRadio.Mono;
 
 public class RadioController : MonoBehaviour
 {
-    private static int _initialParamNumber;
+    private static int _aacUrlParamNumber;
     private static string _aacUrl;
-    private static AudioSource _audioSource;
+    public static AudioSource AudioSource;
     private static AudioManager _audioManager;
     private static Radio _radio;
     private static bool _isPaused;
     private static bool _isPlaying;
     private static string _selectionChannel;
     private static readonly ILog LOG = KoreaRadioBroadcasting._log;
+    private static bool _isConverting = true;
 
     private void Start()
     {
-        _audioSource = gameObject.AddComponent<AudioSource>();
         _audioManager = AudioManager.instance;
-        _audioSource.playOnAwake = false;
+        AudioSource = gameObject.AddComponent<AudioSource>();
+        AudioSource.playOnAwake = false;
+        AudioSource.loop = false;
         _radio = RealtimeRadio.Radio;
         LOG.Info("Radio start");
     }
@@ -41,10 +44,10 @@ public class RadioController : MonoBehaviour
         var channel = _radio.currentChannel;
         _isPaused = _radio.paused;
         _selectionChannel = channel.name;
-        _audioSource.volume = _audioManager.radioVolume;
+        AudioSource.volume = _audioManager.radioVolume;
         if (_isPaused || _radio.muted)
         {
-            _audioSource.volume = 0.0f;
+            AudioSource.volume = 0.0f;
         }
         if (channel.network == "Live korean radio")
         {
@@ -138,16 +141,16 @@ public class RadioController : MonoBehaviour
 
     private void OnDisable()
     {
-        _audioSource.Stop();
+        AudioSource.Stop();
         _isPlaying = false;
         _isPaused = false;
     }
 
     private IEnumerator ConvertAndPlayAudio(string streamServer)
     {
-        var aacUrl = streamServer + ReplaceNumbers(_aacUrl, _initialParamNumber++.ToString());
-        LOG.Info($"Aac Url: {aacUrl}");
-        ConvertAccToWavFile(aacUrl, 0);
+        var aacUrl = streamServer + ReplaceNumbers(_aacUrl, _aacUrlParamNumber++.ToString());
+        LOG.Info($"convert start: {aacUrl}");
+        yield return ThreadPool.QueueUserWorkItem(_ => ConvertAccToWavFile(aacUrl, 0));
         yield return StartCoroutine(PlayAudio());
     }
 
@@ -252,7 +255,7 @@ public class RadioController : MonoBehaviour
             if (!match.Success) continue;
             
             _aacUrl = lines[++i].Trim();
-            _initialParamNumber = ExtractNumbers(_aacUrl);
+            _aacUrlParamNumber = ExtractNumbers(_aacUrl) - 2;
             break;
         }
     }
@@ -275,19 +278,30 @@ public class RadioController : MonoBehaviour
         var www = UnityWebRequestMultimedia.GetAudioClip(GetWavFileName(0), AudioType.WAV);
         yield return www.SendWebRequest();
         
+        if (www.result != UnityWebRequest.Result.Success)
+        {
+            LOG.Warn($"Wave load fail: {www.error}");
+            _aacUrlParamNumber -= 1;
+            yield return new WaitForSeconds(1.0f);
+            yield break;
+        }
+        
         var nextAudioSource = gameObject.AddComponent<AudioSource>();
-        var clip = DownloadHandlerAudioClip.GetContent(www);
-        nextAudioSource.clip = clip;
+        nextAudioSource.playOnAwake = AudioSource.playOnAwake;
+        nextAudioSource.loop = AudioSource.loop;
+        nextAudioSource.volume = AudioSource.volume;
+        nextAudioSource.clip = DownloadHandlerAudioClip.GetContent(www);
         
         yield return new WaitWhile(() =>
         {
-            if (!_audioSource.isPlaying)
+            if (!AudioSource.isPlaying)
                 return false;
             
-            var clipLength = _audioSource.clip.length;
+            var clipLength = AudioSource.clip.length;
+            var correction = clipLength < 4 ? 0.06f : 0.065f;
+            
             // Missing buffer after conversion to wave file
-            var correction = clipLength < 3 ? 0.06f : 0.065f;
-            return _audioSource.time < clipLength - correction;
+            return AudioSource.time < clipLength - correction;
         });
         
         if (_isPaused)
@@ -299,40 +313,32 @@ public class RadioController : MonoBehaviour
             nextAudioSource.Play();
         }
 
-        _audioSource = nextAudioSource;
+        yield return new WaitWhile(() => AudioSource.isPlaying);
+        Destroy(AudioSource);
+        AudioSource = nextAudioSource;
     }
-
-    private static bool _isConverting;
     
     // FIXME : Start of wave file Audio truncated
     private static void ConvertAccToWavFile(string aacUrl, int index)
     {
-        if (_isConverting)
+        try
         {
-            return;
-        }
+            using var aacReader = new MediaFoundationReader(aacUrl);
+            var aacToWav = new WaveFormatConversionStream(new WaveFormat(44100, 16, 2), aacReader);
+            using var wavWriter = new WaveFileWriter(GetWavFileName(index), new WaveFormat(44100, 16, 2));
+            var buffer = new byte[4096 * 4096];
+            int bytesRead;
 
-        _isConverting = true;
-        ThreadPool.QueueUserWorkItem(state =>
+            while ((bytesRead = aacToWav.Read(buffer, 0, buffer.Length)) > 0)
+            {
+                wavWriter.Write(buffer, 0, bytesRead);
+            }
+        }
+        catch
         {
-            try
-            {
-                using var aacReader = new MediaFoundationReader(aacUrl);
-                var aacToWav = new WaveFormatConversionStream(new WaveFormat(44100, 16, 2), aacReader);
-                using var wavWriter = new WaveFileWriter(GetWavFileName(index), new WaveFormat(44100, 16, 2));
-                var buffer = new byte[4096 * 4096];
-                int bytesRead;
-                        
-                while ((bytesRead = aacToWav.Read(buffer, 0, buffer.Length)) > 0)
-                {
-                    wavWriter.Write(buffer, 0, bytesRead);
-                }
-            }
-            finally
-            {
-                _isConverting = false;
-            }
-        });
+            LOG.Warn("Realtime so fast");
+            _aacUrlParamNumber -= 1;
+        }
     }
 
     private static string GetWavFileName(int index)

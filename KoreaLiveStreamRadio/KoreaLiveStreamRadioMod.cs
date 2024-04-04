@@ -2,6 +2,7 @@
 using Game;
 using Game.Modding;
 using HarmonyLib;
+using KoreaLiveStreamRadio.Mono;
 
 namespace KoreaLiveStreamRadio
 {
@@ -10,18 +11,19 @@ namespace KoreaLiveStreamRadio
         public static ILog log = LogManager.GetLogger($"{nameof(KoreaLiveStreamRadioMod)}")
             .SetShowsErrorsInUI(false);
 
-        private Harmony harmony;
+        private Harmony _harmony;
 
         public void OnLoad(UpdateSystem updateSystem)
         {
-            harmony = new Harmony($"{nameof(KoreaLiveStreamRadio)}.{nameof(KoreaLiveStreamRadioMod)}");
-            harmony.PatchAll(typeof(KoreaLiveStreamRadioMod).Assembly);
+            _harmony = new Harmony($"{nameof(KoreaLiveStreamRadio)}.{nameof(KoreaLiveStreamRadioMod)}");
+            _harmony.PatchAll(typeof(KoreaLiveStreamRadioMod).Assembly);
             log.Info(nameof(OnLoad));
         }
 
         public void OnDispose()
         {
-            harmony.UnpatchAll();
+            RadioController.AudioSource.Stop();
+            _harmony.UnpatchAll();
             log.Info(nameof(OnDispose));
         }
         

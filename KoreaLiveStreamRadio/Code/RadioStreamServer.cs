@@ -10,70 +10,21 @@ public class RadioStreamServer
 
     public static string GetStreamServer(string station, string channel)
     {
-        if (station == "mbc")
+        return station switch
         {
-            return $"https://minicw.imbc.com/d{channel}/_definst_/{channel}.stream/";
-        }
-        if (station == "sbs")
-        {
-            if (channel == "lovefm")
-            {
-                return "https://radiolive.sbs.co.kr/lovepc/lovefm.stream/";
-            }
-
-            if (channel == "powerfm")
-            {
-                return "https://radiolive.sbs.co.kr/powerpc/powerfm.stream/";
-            }
-
-            if (channel == "dmb")
-            {
-                return "https://radiolive.sbs.co.kr/sbsdmbpc/sbsdmb.stream/";
-            }
-        }
-
-        if (station == "kbs")
-        {
-            if (channel == "1radio")
-            {
-                return "https://1radio.gscdn.kbs.co.kr/";
-            }
-
-            if (channel == "2radio")
-            {
-                return "https://2radio-ad.gscdn.kbs.co.kr/";
-            }
-
-            if (channel == "3radio")
-            {
-                return "https://3radio.gscdn.kbs.co.kr/";
-            }
-
-            if (channel == "1fm")
-            {
-                return "https://1fm.gscdn.kbs.co.kr/";
-            }
-
-            if (channel == "2fm")
-            {
-                return "https://2fm-ad.gscdn.kbs.co.kr/";
-            }
-        }
-
-        if (station == "ytn")
-        {
-            return "https://radiolive.ytn.co.kr/radio/_definst_/20211118_fmlive/";
-        }
-
-        if (station == "cbs")
-        {
-            if (channel == "mfm")
-            {
-                return "https://aac.cbs.co.kr/cbs939/_definst_/cbs939.stream/";
-            }
-        }
-
-        return "";
+            "mbc" => $"https://minicw.imbc.com/d{channel}/_definst_/{channel}.stream/",
+            "sbs" when channel == "lovefm" => "https://radiolive.sbs.co.kr/lovepc/lovefm.stream/",
+            "sbs" when channel == "powerfm" => "https://radiolive.sbs.co.kr/powerpc/powerfm.stream/",
+            "sbs" when channel == "dmb" => "https://radiolive.sbs.co.kr/sbsdmbpc/sbsdmb.stream/",
+            "kbs" when channel == "1radio" => "https://1radio.gscdn.kbs.co.kr/",
+            "kbs" when channel == "2radio" => "https://2radio-ad.gscdn.kbs.co.kr/",
+            "kbs" when channel == "3radio" => "https://3radio.gscdn.kbs.co.kr/",
+            "kbs" when channel == "1fm" => "https://1fm.gscdn.kbs.co.kr/",
+            "kbs" when channel == "2fm" => "https://2fm-ad.gscdn.kbs.co.kr/",
+            "ytn" => "https://radiolive.ytn.co.kr/radio/_definst_/20211118_fmlive/",
+            "cbs" when channel == "mfm" => "https://aac.cbs.co.kr/cbs939/_definst_/cbs939.stream/",
+            _ => ""
+        };
     }
 
     public static string GetHlsServerUrl(string station, string channel)
