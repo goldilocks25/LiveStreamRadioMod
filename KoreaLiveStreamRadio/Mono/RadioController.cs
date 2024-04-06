@@ -290,7 +290,6 @@ public class RadioController : MonoBehaviour
 
     private IEnumerator PlayAudio(float correction)
     {
-        yield return new WaitWhile(() => _isConverting);
         var www = UnityWebRequestMultimedia.GetAudioClip(GetWavFileName(0), AudioType.WAV);
         yield return www.SendWebRequest();
         
@@ -334,7 +333,6 @@ public class RadioController : MonoBehaviour
     // FIXME : Start of wave file Audio truncated
     private static void ConvertAccToWavFile(string aacUrl, int index)
     {
-        _isConverting = true;
         try
         {
             using var aacReader = new MediaFoundationReader(aacUrl);
@@ -354,8 +352,6 @@ public class RadioController : MonoBehaviour
             LOG.Warn("Realtime so fast");
             _aacUrlParamNumber -= 1;
         }
-
-        _isConverting = false;
     }
 
     private static string GetWavFileName(int index)
