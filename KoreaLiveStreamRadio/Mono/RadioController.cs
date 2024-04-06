@@ -18,6 +18,7 @@ public class RadioController : MonoBehaviour
 {
     private static int _aacUrlParamNumber;
     private static string _aacUrl;
+    private static string _chunkFileUrl;
     public static AudioSource AudioSource;
     private static AudioManager _audioManager;
     private static Radio _radio;
@@ -25,7 +26,8 @@ public class RadioController : MonoBehaviour
     private static bool _isPlaying;
     private static string _selectionChannel;
     private static readonly ILog LOG = KoreaRadioBroadcasting._log;
-    private static bool _isConverting = true;
+    private static float _segmentLength;
+    private static bool _dummy;
 
     private void Start()
     {
@@ -164,7 +166,20 @@ public class RadioController : MonoBehaviour
     {
         var aacUrl = streamServer + ReplaceNumbers(_aacUrl, _aacUrlParamNumber++.ToString());
         LOG.Info($"convert start: {aacUrl}");
-        yield return ThreadPool.QueueUserWorkItem(_ => ConvertAccToWavFile(aacUrl, 0));
+        yield return ThreadPool.QueueUserWorkItem(_ =>
+        {
+            try
+            {
+                ConvertAccToWavFile(aacUrl, 0);
+            }
+            catch (Exception e)
+            {
+                LOG.Info($"So fast stream: {e.StackTrace}");
+                _dummy = true;
+            }
+        });
+        if (_dummy) yield break;
+        
         yield return StartCoroutine(PlayAudio(correction));
     }
 
@@ -203,9 +218,11 @@ public class RadioController : MonoBehaviour
         );
         while (_selectionChannel == gameChannel)
         {
+            yield return StartCoroutine(DownloadPls(streamServer, _chunkFileUrl));
             yield return StartCoroutine(ConvertAndPlayAudio(streamServer, liveStreamRadio.Correction));
         }
         _isPlaying = false;
+        _dummy = false;
     }
 
     private static string ParsePls(string plsContent)
@@ -248,9 +265,10 @@ public class RadioController : MonoBehaviour
             if (string.IsNullOrEmpty(line)) continue;
             if (line.Contains(".m3u8"))
             {
-                LOG.Info($"chunk server: {streamServer + line.Trim()}");
+                _chunkFileUrl = streamServer + line.Trim();
+                LOG.Info($"chunk server: {_chunkFileUrl}");
                 // M3U8 파일 다운로드
-                var www = UnityWebRequest.Get(streamServer + line.Trim());
+                var www = UnityWebRequest.Get(_chunkFileUrl);
                 yield return www.SendWebRequest();
 
                 if (www.result != UnityWebRequest.Result.Success)
@@ -267,9 +285,11 @@ public class RadioController : MonoBehaviour
                 yield return StartCoroutine(ExtractUrls(streamServer, www.downloadHandler.text));
                 yield break;
             }
+            
             var match = Regex.Match(line, pattern);
             if (!match.Success) continue;
             
+            _segmentLength = Math.Min(3, float.Parse(match.Groups[1].Value));
             _aacUrl = lines[++i].Trim();
             _aacUrlParamNumber = ExtractNumbers(_aacUrl);
             break;
@@ -305,7 +325,6 @@ public class RadioController : MonoBehaviour
         nextAudioSource.playOnAwake = AudioSource.playOnAwake;
         nextAudioSource.loop = AudioSource.loop;
         nextAudioSource.volume = AudioSource.volume;
-        nextAudioSource.clip = DownloadHandlerAudioClip.GetContent(www);
         
         yield return new WaitWhile(() =>
         {
@@ -333,24 +352,15 @@ public class RadioController : MonoBehaviour
     // FIXME : Start of wave file Audio truncated
     private static void ConvertAccToWavFile(string aacUrl, int index)
     {
-        try
-        {
-            using var aacReader = new MediaFoundationReader(aacUrl);
-            var aacToWav = new WaveFormatConversionStream(new WaveFormat(44100, 16, 2), aacReader);
-            using var wavWriter = new WaveFileWriter(GetWavFileName(index), new WaveFormat(44100, 16, 2));
-            var buffer = new byte[4096 * 4096];
-            int bytesRead;
+        using var aacReader = new MediaFoundationReader(aacUrl);
+        using var aacToWav = new WaveFormatConversionStream(new WaveFormat(44100, 16, 2), aacReader);
+        using var wavWriter = new WaveFileWriter(GetWavFileName(index), new WaveFormat(44100, 16, 2));
+        var buffer = new byte[4096 * 4096];
+        int bytesRead;
 
-            while ((bytesRead = aacToWav.Read(buffer, 0, buffer.Length)) > 0)
-            {
-                wavWriter.Write(buffer, 0, bytesRead);
-            }
-            wavWriter.Close();
-        }
-        catch
+        while ((bytesRead = aacToWav.Read(buffer, 0, buffer.Length)) > 0)
         {
-            LOG.Warn("Realtime so fast");
-            _aacUrlParamNumber -= 1;
+            wavWriter.Write(buffer, 0, bytesRead);
         }
     }
 
@@ -389,6 +399,22 @@ public class RadioController : MonoBehaviour
             LiveChannel = liveChannel;
             StreamChannel = streamChannel;
             Correction = correction;
+        }
+    }
+
+    static int FindNearestInteger(double number)
+    {
+        // 주어진 실수와 가장 가까운 정수를 찾아 반환
+        double floorValue = Math.Floor(number);
+        double ceilValue = Math.Ceiling(number);
+
+        if (number - floorValue < ceilValue - number)
+        {
+            return (int)floorValue;
+        }
+        else
+        {
+            return (int)ceilValue;
         }
     }
 

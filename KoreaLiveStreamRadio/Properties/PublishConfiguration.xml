@@ -17,7 +17,7 @@ It was live stream radio in korea
 	<!--Tag, can be set multiple times-->
 	<Tag Value="Code Mod" />
 	<!--Link to the forum post where the mod can be discussed-->
-	<ForumLink Value="" />
+	<ForumLink Value="https://forum.paradoxplaza.com/forum/threads/korea-live-stream-radio.1659154/" />
 	<!--Version of the mod-->
 	<ModVersion Value="1.0.7" />
 	<!--Recommended version of the base game to use the mod-->

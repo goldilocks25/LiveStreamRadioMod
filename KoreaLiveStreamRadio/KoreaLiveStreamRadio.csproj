@@ -63,7 +63,7 @@
         <None Update="Assets\korean_radio.png">
           <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
         </None>
-        <None Update="Assets\mbc_radio.jpg">
+        <None Update= "Assets\mbc_radio.jpg">
           <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
         </None>
         <None Update="Assets\sbs_radio.jpg">
