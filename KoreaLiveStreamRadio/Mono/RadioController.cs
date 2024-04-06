@@ -17,7 +17,7 @@ namespace KoreaLiveStreamRadio.Mono;
 public class RadioController : MonoBehaviour
 {
     private static int _aacUrlParamNumber;
-    private static string _aacUrl;
+    private static string _aacPath;
     private static string _chunkFileUrl;
     public static AudioSource AudioSource;
     private static AudioManager _audioManager;
@@ -28,6 +28,7 @@ public class RadioController : MonoBehaviour
     private static readonly ILog LOG = KoreaRadioBroadcasting._log;
     private static float _segmentLength;
     private static bool _dummy;
+    private static bool _isConverting;
 
     private void Start()
     {
@@ -56,7 +57,6 @@ public class RadioController : MonoBehaviour
             string liveStation = null;
             string liveChannel = null;
             string streamChannel = null;
-            var conversion = 0.65f;
             
             switch (channel.name)
             {
@@ -64,86 +64,74 @@ public class RadioController : MonoBehaviour
                     liveStation = "mbc";
                     liveChannel = "chm";
                     streamChannel = "chm";
-                    conversion = 0.06f;
                     break;
                 case "MBC standard fm":
                     liveStation = "mbc";
                     liveChannel = "sfm";
                     streamChannel = "sfm";
-                    conversion = 0.06f;
                     break;
                 case "MBC fm 4u":
                     liveStation = "mbc";
                     liveChannel = "fm4u";
                     streamChannel = "mfm";
-                    conversion = 0.06f;
                     break;
                 case "SBS love fm":
                     liveStation = "sbs";
                     liveChannel = "lovefm";
                     streamChannel = "lovefm";
-                    conversion = 0.05f;
                     break;
                 case "SBS power fm":
                     liveStation = "sbs";
                     liveChannel = "powerfm";
                     streamChannel = "powerfm";
-                    conversion = 0.0375f;
                     break;
                 case "SBS gorilradio m":
                     liveStation = "sbs";
                     liveChannel = "dmb";
                     streamChannel = "dmb";
-                    conversion = 0.0375f;
                     break;
                 case "KBS 1 radio":
                     liveStation = "kbs";
                     liveChannel = "1radio";
                     streamChannel = "1radio";
-                    conversion = 0.055f;
                     break;
                 case "KBS 2 radio":
                     liveStation = "kbs";
                     liveChannel = "2radio";
                     streamChannel = "2radio";
-                    conversion = 0.055f;
                     break;
                 case "KBS 3 radio":
                     liveStation = "kbs";
                     liveChannel = "3radio";
                     streamChannel = "3radio";
-                    conversion = 0.055f;
                     break;
                 case "KBS 1 FM radio":
                     liveStation = "kbs";
                     liveChannel = "1fm";
                     streamChannel = "1fm";
-                    conversion = 0.06f;
                     break;
                 case "KBS 2 FM radio":
                     liveStation = "kbs";
                     liveChannel = "2fm";
                     streamChannel = "2fm";
-                    conversion = 0.06f;
                     break;
                 case "YTN radio":
                     liveStation = "ytn";
                     liveChannel = "";
                     streamChannel = "";
-                    conversion = 0.06f;
                     break;
                 case "CBS music fm radio":
                     liveStation = "cbs";
                     liveChannel = "mfm";
                     streamChannel = "mfm";
-                    conversion = 0.06f;
                     break;
             }
-            var liveStreamRadio = new LiveStreamRadio(liveStation, liveChannel, streamChannel, conversion);
+            var liveStreamRadio = new LiveStreamRadio(liveStation, liveChannel, streamChannel);
             if (liveStation == null) return;
 
             if (_isPlaying) return;
             _isPlaying = true;
+            _aacUrlParamNumber = 0;
             LOG.Info($"start radio: {channel.name}");
             StopCoroutine("Play");
             StartCoroutine(Play(liveStreamRadio, channel.name));
@@ -162,25 +150,29 @@ public class RadioController : MonoBehaviour
         _isPaused = false;
     }
 
-    private IEnumerator ConvertAndPlayAudio(string streamServer, float correction)
+    private IEnumerator ConvertAndPlayAudio(string streamServer)
     {
-        var aacUrl = streamServer + ReplaceNumbers(_aacUrl, _aacUrlParamNumber++.ToString());
-        LOG.Info($"convert start: {aacUrl}");
+        var aacUrl = streamServer + ReplaceNumbers(_aacPath, _aacUrlParamNumber++.ToString());
+        // LOG.Info($"convert start: {aacUrl}");
         yield return ThreadPool.QueueUserWorkItem(_ =>
         {
             try
             {
-                ConvertAccToWavFile(aacUrl, 0);
+                _isConverting = true;
+                ConvertAccToWavFile(aacUrl);
             }
             catch (Exception e)
             {
                 LOG.Info($"So fast stream: {e.StackTrace}");
                 _dummy = true;
             }
+            finally
+            {
+                _isConverting = false;
+            }
         });
-        if (_dummy) yield break;
         
-        yield return StartCoroutine(PlayAudio(correction));
+        yield return StartCoroutine(PlayAudio());
     }
 
     private IEnumerator DownloadAndParsePls(string streamServer, string hlsServer)
@@ -216,10 +208,9 @@ public class RadioController : MonoBehaviour
         yield return StartCoroutine(DownloadAndParsePls(streamServer,
             RadioStreamServer.GetHlsServerUrl(liveStreamRadio.LiveStation, liveStreamRadio.LiveChannel))
         );
-        while (_selectionChannel == gameChannel)
+        while (_selectionChannel == gameChannel && !_dummy)
         {
-            yield return StartCoroutine(DownloadPls(streamServer, _chunkFileUrl));
-            yield return StartCoroutine(ConvertAndPlayAudio(streamServer, liveStreamRadio.Correction));
+            yield return StartCoroutine(ConvertAndPlayAudio(streamServer));
         }
         _isPlaying = false;
         _dummy = false;
@@ -288,17 +279,19 @@ public class RadioController : MonoBehaviour
             
             var match = Regex.Match(line, pattern);
             if (!match.Success) continue;
-            
-            _segmentLength = Math.Min(3, float.Parse(match.Groups[1].Value));
-            _aacUrl = lines[++i].Trim();
-            _aacUrlParamNumber = ExtractNumbers(_aacUrl);
+
+            if (_aacUrlParamNumber == 0)
+            {
+                _aacPath = lines[++i].Trim();
+                _aacUrlParamNumber = ExtractNumbers(_aacPath);
+            }
             break;
         }
     }
 
-    private static int ExtractNumbers(string input)
+    private static int ExtractNumbers(string aacPath)
     {
-        var match = Regex.Match(input, @"\d+\.");
+        var match = Regex.Match(aacPath, @"\d+\.");
         return int.Parse(match.Value.Replace(".", ""));
     }
 
@@ -308,9 +301,11 @@ public class RadioController : MonoBehaviour
         return input.Substring(0, match.Index) + newNumbers+ "." + input.Substring(match.Index + match.Length);
     }
 
-    private IEnumerator PlayAudio(float correction)
+    private IEnumerator PlayAudio()
     {
-        var www = UnityWebRequestMultimedia.GetAudioClip(GetWavFileName(0), AudioType.WAV);
+        yield return new WaitWhile(() => _isConverting);
+        if (_dummy) yield break;
+        var www = UnityWebRequestMultimedia.GetAudioClip(GetWavFileName(), AudioType.WAV);
         yield return www.SendWebRequest();
         
         if (www.result != UnityWebRequest.Result.Success)
@@ -325,15 +320,17 @@ public class RadioController : MonoBehaviour
         nextAudioSource.playOnAwake = AudioSource.playOnAwake;
         nextAudioSource.loop = AudioSource.loop;
         nextAudioSource.volume = AudioSource.volume;
+        nextAudioSource.clip = DownloadHandlerAudioClip.GetContent(www);
         
-        yield return new WaitWhile(() =>
+        var segmentLength = 0.0f;
+        const float correction = 0.01f;
+        
+        if (AudioSource.isPlaying)
         {
-            if (!AudioSource.isPlaying)
-                return false;
-            
-            // Missing buffer after conversion to wave file
-            return AudioSource.time < AudioSource.clip.length - correction;
-        });
+            var clipLength = AudioSource.clip.length;
+            segmentLength = Math.Abs(clipLength - FindNearestInteger(clipLength));
+            yield return new WaitWhile(() => AudioSource.time < clipLength - segmentLength - correction);
+        }
         
         if (_isPaused)
         {
@@ -347,14 +344,15 @@ public class RadioController : MonoBehaviour
         yield return new WaitWhile(() => AudioSource.isPlaying);
         Destroy(AudioSource);
         AudioSource = nextAudioSource;
+        yield return new WaitForSeconds(segmentLength);
     }
     
     // FIXME : Start of wave file Audio truncated
-    private static void ConvertAccToWavFile(string aacUrl, int index)
+    private static void ConvertAccToWavFile(string aacUrl)
     {
         using var aacReader = new MediaFoundationReader(aacUrl);
         using var aacToWav = new WaveFormatConversionStream(new WaveFormat(44100, 16, 2), aacReader);
-        using var wavWriter = new WaveFileWriter(GetWavFileName(index), new WaveFormat(44100, 16, 2));
+        using var wavWriter = new WaveFileWriter(GetWavFileName(), new WaveFormat(44100, 16, 2));
         var buffer = new byte[4096 * 4096];
         int bytesRead;
 
@@ -364,9 +362,9 @@ public class RadioController : MonoBehaviour
         }
     }
 
-    private static string GetWavFileName(int index)
+    private static string GetWavFileName()
     {
-        return GetFileName(index, "wav");
+        return GetFileName(0, "wav");
     }
 
     private static string GetFileName(int index, string format)
@@ -388,25 +386,20 @@ public class RadioController : MonoBehaviour
         {
             get;
         }
-        public float Correction
-        {
-            get;
-        }
 
-        internal LiveStreamRadio(string liveStation, string liveChannel, string streamChannel, float correction)
+        internal LiveStreamRadio(string liveStation, string liveChannel, string streamChannel)
         {
             LiveStation = liveStation;
             LiveChannel = liveChannel;
             StreamChannel = streamChannel;
-            Correction = correction;
         }
     }
 
-    static int FindNearestInteger(double number)
+    private static int FindNearestInteger(double number)
     {
         // 주어진 실수와 가장 가까운 정수를 찾아 반환
-        double floorValue = Math.Floor(number);
-        double ceilValue = Math.Ceiling(number);
+        var floorValue = Math.Floor(number);
+        var ceilValue = Math.Ceiling(number);
 
         if (number - floorValue < ceilValue - number)
         {
