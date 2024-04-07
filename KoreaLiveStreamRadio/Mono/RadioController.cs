@@ -26,7 +26,6 @@ public class RadioController : MonoBehaviour
     private static bool _isPlaying;
     private static string _selectionChannel;
     private static readonly ILog LOG = KoreaRadioBroadcasting._log;
-    private static float _segmentLength;
     private static bool _dummy;
     private static bool _isConverting;
 
@@ -44,6 +43,7 @@ public class RadioController : MonoBehaviour
     {
         if (!_radio.isActive) return;
         if (!_radio.isEnabled) return;
+        if (AudioSource == null) return;
         var channel = _radio.currentChannel;
         _isPaused = _radio.paused;
         _selectionChannel = channel.name;
@@ -133,7 +133,6 @@ public class RadioController : MonoBehaviour
             _isPlaying = true;
             _aacUrlParamNumber = 0;
             LOG.Info($"start radio: {channel.name}");
-            StopCoroutine("Play");
             StartCoroutine(Play(liveStreamRadio, channel.name));
         }
         else
@@ -319,25 +318,20 @@ public class RadioController : MonoBehaviour
         var nextAudioSource = gameObject.AddComponent<AudioSource>();
         nextAudioSource.playOnAwake = AudioSource.playOnAwake;
         nextAudioSource.loop = AudioSource.loop;
-        nextAudioSource.volume = AudioSource.volume;
         nextAudioSource.clip = DownloadHandlerAudioClip.GetContent(www);
         
         var segmentLength = 0.0f;
-        const float correction = 0.01f;
         
         if (AudioSource.isPlaying)
         {
             var clipLength = AudioSource.clip.length;
-            segmentLength = Math.Abs(clipLength - FindNearestInteger(clipLength));
-            yield return new WaitWhile(() => AudioSource.time < clipLength - segmentLength - correction);
+            segmentLength = Math.Abs(clipLength - Math.Abs(FindNearestInteger(clipLength)));
+            yield return new WaitWhile(() => AudioSource.time < clipLength - segmentLength);
         }
         
-        if (_isPaused)
+        if (!_isPaused)
         {
-            nextAudioSource.Pause();
-        }
-        else
-        {
+            nextAudioSource.volume = AudioSource.volume;
             nextAudioSource.Play();
         }
 
@@ -351,8 +345,9 @@ public class RadioController : MonoBehaviour
     private static void ConvertAccToWavFile(string aacUrl)
     {
         using var aacReader = new MediaFoundationReader(aacUrl);
-        using var aacToWav = new WaveFormatConversionStream(new WaveFormat(44100, 16, 2), aacReader);
-        using var wavWriter = new WaveFileWriter(GetWavFileName(), new WaveFormat(44100, 16, 2));
+        var format = new WaveFormat(48000, 16, 2);
+        using var aacToWav = new WaveFormatConversionStream(format, aacReader);
+        using var wavWriter = new WaveFileWriter(GetWavFileName(), format);
         var buffer = new byte[4096 * 4096];
         int bytesRead;
 
@@ -405,10 +400,8 @@ public class RadioController : MonoBehaviour
         {
             return (int)floorValue;
         }
-        else
-        {
-            return (int)ceilValue;
-        }
+
+        return (int)ceilValue;
     }
 
 }
