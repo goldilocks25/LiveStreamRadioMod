@@ -59,8 +59,8 @@ public class KoreaRadioBroadcasting
             description = "라디오",
             icon = icon,
             startTime = "00:00",
-            endTime = "23:59",
-            loopProgram = false,
+            endTime = "00:00",
+            loopProgram = true,
             pairIntroOutro = false,
             segments = [],
         };

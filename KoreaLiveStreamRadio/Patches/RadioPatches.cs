@@ -11,7 +11,8 @@ class RealtimeRadio
     public static Radio Radio;
     public static Traverse Traverse;
     
-    static void Postfix(Radio __instance) {
+    [HarmonyPostfix]
+    static void GetRadioInstance(Radio __instance) {
         Radio = __instance;
         Traverse = Traverse.Create(__instance);
         KoreaRadioBroadcasting.CreateBroadCast();

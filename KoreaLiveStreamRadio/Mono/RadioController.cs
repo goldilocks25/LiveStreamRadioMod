@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections;
+using System.Collections.Generic;
 using System.Linq;
 using System.Text.RegularExpressions;
 using System.Threading;
@@ -8,6 +9,7 @@ using KoreaLiveStreamRadio.Code;
 using KoreaLiveStreamRadio.Patches;
 using Game.Audio;
 using Game.Audio.Radio;
+using HarmonyLib;
 using NAudio.Wave;
 using UnityEngine;
 using UnityEngine.Networking;
@@ -16,6 +18,8 @@ namespace KoreaLiveStreamRadio.Mono;
 
 public class RadioController : MonoBehaviour
 {
+    private static Traverse _traverse;
+    private static Radio.RadioPlayer _mRadioPlayer;
     private static int _aacUrlParamNumber;
     private static string _aacPath;
     private static string _chunkFileUrl;
@@ -31,6 +35,8 @@ public class RadioController : MonoBehaviour
 
     private void Start()
     {
+        _traverse = RealtimeRadio.Traverse;
+        _mRadioPlayer = _traverse.Field("m_RadioPlayer").GetValue<Radio.RadioPlayer>();
         _audioManager = AudioManager.instance;
         AudioSource = gameObject.AddComponent<AudioSource>();
         AudioSource.playOnAwake = false;
@@ -54,6 +60,14 @@ public class RadioController : MonoBehaviour
         }
         if (channel.network == "Live korean radio")
         {
+            if (_mRadioPlayer.isPlaying)
+            {
+                if (!_radio.hasEmergency)
+                {
+                    // Resolving issue of previous radio playback after emergency alert
+                    _mRadioPlayer.Pause();
+                }
+            }
             string liveStation = null;
             string liveChannel = null;
             string streamChannel = null;
@@ -326,7 +340,7 @@ public class RadioController : MonoBehaviour
         {
             var clipLength = AudioSource.clip.length;
             segmentLength = Math.Abs(clipLength - Math.Abs(FindNearestInteger(clipLength)));
-            yield return new WaitWhile(() => AudioSource.time < clipLength - segmentLength);
+            yield return new WaitWhile(() => AudioSource.isPlaying && AudioSource.time < clipLength - segmentLength);
         }
         
         if (!_isPaused)
