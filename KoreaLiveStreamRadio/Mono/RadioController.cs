@@ -359,9 +359,8 @@ public class RadioController : MonoBehaviour
     private static void ConvertAccToWavFile(string aacUrl)
     {
         using var aacReader = new MediaFoundationReader(aacUrl);
-        var format = new WaveFormat(48000, 16, 2);
-        using var aacToWav = new WaveFormatConversionStream(format, aacReader);
-        using var wavWriter = new WaveFileWriter(GetWavFileName(), format);
+        using var aacToWav = new WaveFormatConversionStream(aacReader.WaveFormat, aacReader);
+        using var wavWriter = new WaveFileWriter(GetWavFileName(), aacReader.WaveFormat);
         var buffer = new byte[4096 * 4096];
         int bytesRead;
 
@@ -406,7 +405,6 @@ public class RadioController : MonoBehaviour
 
     private static int FindNearestInteger(double number)
     {
-        // 주어진 실수와 가장 가까운 정수를 찾아 반환
         var floorValue = Math.Floor(number);
         var ceilValue = Math.Ceiling(number);
 

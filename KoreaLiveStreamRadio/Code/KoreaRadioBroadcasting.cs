@@ -12,7 +12,7 @@ namespace KoreaLiveStreamRadio.Code;
 public class KoreaRadioBroadcasting
 {
 
-    public static ILog _log = KoreaLiveStreamRadioMod.log;
+    public static ILog _log = KoreaLiveStreamRadioMod.LOG;
     private static Traverse _traverse;
     private static readonly GameObject RadioController = new("RadioController");
         
