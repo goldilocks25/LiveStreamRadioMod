@@ -11,11 +11,13 @@ using Game.Audio;
 using Game.Audio.Radio;
 using HarmonyLib;
 using NAudio.Wave;
+using Unity.Burst;
 using UnityEngine;
 using UnityEngine.Networking;
 
 namespace KoreaLiveStreamRadio.Mono;
 
+[BurstCompile]
 public class RadioController : MonoBehaviour
 {
     private static Traverse _traverse;
@@ -176,7 +178,7 @@ public class RadioController : MonoBehaviour
             }
             catch (Exception e)
             {
-                LOG.Info($"So fast stream: {e.StackTrace}");
+                LOG.Warn("So fast stream");
                 _dummy = true;
             }
             finally
@@ -314,6 +316,7 @@ public class RadioController : MonoBehaviour
         return input.Substring(0, match.Index) + newNumbers+ "." + input.Substring(match.Index + match.Length);
     }
 
+    [BurstCompile]
     private IEnumerator PlayAudio()
     {
         yield return new WaitWhile(() => _isConverting);
