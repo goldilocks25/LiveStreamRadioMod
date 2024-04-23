@@ -12,7 +12,7 @@ public class RadioStreamServer
     {
         return station switch
         {
-            "mbc" => $"https://minicw.imbc.com/d{channel}/_definst_/{channel}.stream/",
+            "mbc" => $"https://minicw2.imbc.com/d2{channel}/_definst_/{channel}.stream/",
             "sbs" when channel == "lovefm" => "https://radiolive.sbs.co.kr/lovepc/lovefm.stream/",
             "sbs" when channel == "powerfm" => "https://radiolive.sbs.co.kr/powerpc/powerfm.stream/",
             "sbs" when channel == "dmb" => "https://radiolive.sbs.co.kr/sbsdmbpc/sbsdmb.stream/",
