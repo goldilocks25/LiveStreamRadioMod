@@ -34,6 +34,7 @@ public class RadioController : MonoBehaviour
     private static readonly ILog LOG = KoreaRadioBroadcasting._log;
     private static bool _dummy;
     private static bool _isConverting;
+    private static string streamServer;
 
     private void Start()
     {
@@ -165,7 +166,7 @@ public class RadioController : MonoBehaviour
         _isPaused = false;
     }
 
-    private IEnumerator ConvertAndPlayAudio(string streamServer)
+    private IEnumerator ConvertAndPlayAudio()
     {
         var aacUrl = streamServer + ReplaceNumbers(_aacPath, _aacUrlParamNumber++.ToString());
         // LOG.Info($"convert start: {aacUrl}");
@@ -190,7 +191,7 @@ public class RadioController : MonoBehaviour
         yield return StartCoroutine(PlayAudio());
     }
 
-    private IEnumerator DownloadAndParsePls(string streamServer, string hlsServer)
+    private IEnumerator DownloadAndParsePls(string hlsServer)
     {
         using var www = UnityWebRequest.Get(hlsServer);
         yield return www.SendWebRequest();
@@ -212,20 +213,18 @@ public class RadioController : MonoBehaviour
 
         if (m3U8File == null)
             yield break;
-                
-        yield return StartCoroutine(DownloadPls(streamServer, m3U8File));
+
+        streamServer = m3U8File.Substring(0, m3U8File.LastIndexOf("/", StringComparison.Ordinal) + 1);
+        yield return StartCoroutine(DownloadPls(m3U8File));
     }
 
     private IEnumerator Play(LiveStreamRadio liveStreamRadio, string gameChannel)
     {
-        var streamServer =
-            RadioStreamServer.GetStreamServer(liveStreamRadio.LiveStation, liveStreamRadio.StreamChannel);
-        yield return StartCoroutine(DownloadAndParsePls(streamServer,
-            RadioStreamServer.GetHlsServerUrl(liveStreamRadio.LiveStation, liveStreamRadio.LiveChannel))
+        yield return StartCoroutine(DownloadAndParsePls(RadioStreamServer.GetHlsServerUrl(liveStreamRadio.LiveStation, liveStreamRadio.LiveChannel))
         );
         while (_selectionChannel == gameChannel && !_dummy)
         {
-            yield return StartCoroutine(ConvertAndPlayAudio(streamServer));
+            yield return StartCoroutine(ConvertAndPlayAudio());
         }
         _isPlaying = false;
         _dummy = false;
@@ -238,7 +237,7 @@ public class RadioController : MonoBehaviour
         return (from line in lines where line.StartsWith(match) select line.Substring(match.Length).Trim()).FirstOrDefault();
     }
 
-    private IEnumerator DownloadPls(string streamServer, string m3U8Url)
+    private IEnumerator DownloadPls(string m3U8Url)
     {
         LOG.Info($"m3u8 start: {m3U8Url}");
         // M3U8 파일 다운로드
@@ -255,10 +254,10 @@ public class RadioController : MonoBehaviour
             yield break;
         }
 
-        yield return StartCoroutine(ExtractUrls(streamServer, www.downloadHandler.text));
+        yield return StartCoroutine(ExtractUrls(www.downloadHandler.text));
     }
     
-    private IEnumerator ExtractUrls(string streamServer, string m3U8Content)
+    private IEnumerator ExtractUrls(string m3U8Content)
     {
         // 각 줄을 분리하여 순회
         var lines = m3U8Content.Split('\n');
@@ -288,7 +287,7 @@ public class RadioController : MonoBehaviour
                     yield break;
                 }
 
-                yield return StartCoroutine(ExtractUrls(streamServer, www.downloadHandler.text));
+                yield return StartCoroutine(ExtractUrls(www.downloadHandler.text));
                 yield break;
             }
             
