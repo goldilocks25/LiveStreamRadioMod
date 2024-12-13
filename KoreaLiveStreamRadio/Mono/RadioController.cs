@@ -177,9 +177,9 @@ public class RadioController : MonoBehaviour
                 _isConverting = true;
                 ConvertAccToWavFile(aacUrl);
             }
-            catch (Exception e)
+            catch
             {
-                LOG.Warn("So fast stream");
+                LOG.Warn("So fast stream ");
                 _dummy = true;
             }
             finally
